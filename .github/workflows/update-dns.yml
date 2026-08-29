@@ -1,0 +1,58 @@
+name: Update DNS results
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-dns-results
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --requirement requirements.txt
+
+      - name: Query DNS
+        env:
+          OUTPUT_DIR: ${{ runner.temp }}/dns-results
+        run: |
+          mkdir -p "$OUTPUT_DIR"
+          python dns_exporter.py --config config.yaml --output-dir "$OUTPUT_DIR"
+
+      - name: Force-publish a history-free release branch
+        env:
+          OUTPUT_DIR: ${{ runner.temp }}/dns-results
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          ipv4_blob="$(git hash-object -w "$OUTPUT_DIR/IPv4.txt")"
+          ipv6_blob="$(git hash-object -w "$OUTPUT_DIR/IPv6.txt")"
+          tree_id="$({
+            printf '100644 blob %s\tIPv4.txt\n' "$ipv4_blob"
+            printf '100644 blob %s\tIPv6.txt\n' "$ipv6_blob"
+          } | git mktree)"
+          commit_id="$(printf 'Update DNS results\n' | git commit-tree "$tree_id")"
+
+          git push --force origin "$commit_id:refs/heads/release"
