@@ -17,6 +17,8 @@ edns_client_subnets:
 domains:
   - name: contacts.icloud.com
     types: [A, AAAA]
+  - name: gateway.icloud.com
+    types: [A, AAAA]
   - name: sglong.wechat.com
     types: [A]
   - name: sgshort.wechat.com
